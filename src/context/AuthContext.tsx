@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
@@ -11,12 +10,14 @@ import Cookies from 'js-cookie';
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (data: any) => Promise<void>;
-  register: (data: any) => Promise<void>;
+  login: (data: any) => Promise<boolean>;
+  register: (data: any) => Promise<boolean>;
   logout: () => void;
 }
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -36,36 +37,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(false);
   }, []);
 
-  const login = async (data: any) => {
+  const login = async (data: any): Promise<boolean> => {
     try {
       const { access_token, refresh_token } = await loginUser(data);
       AuthTokenManager.setTokens(access_token, refresh_token);
       setIsAuthenticated(true);
       Cookies.set('authenticated', 'true', { expires: 7, path: '/' });
-      router.push('/');
+      return true;
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: error.message || 'Please check your credentials and try again.',
+        description:
+          error.message || 'Please check your credentials and try again.',
       });
+      return false;
     }
   };
 
-  const register = async (data: any) => {
+  const register = async (data: any): Promise<boolean> => {
     try {
       await registerUser(data);
       toast({
         title: 'Registration Successful',
         description: 'You can now log in with your new account.',
       });
-      router.push('/login');
+      return true;
     } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Registration Failed',
-        description: error.message || 'Please check your details and try again.',
+        description:
+          error.message || 'Please check your details and try again.',
       });
+      return false;
     }
   };
 
@@ -84,5 +89,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     logout,
   };
 
-  return <AuthContext.Provider value={value}>{!isLoading && children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {!isLoading && children}
+    </AuthContext.Provider>
+  );
 };

@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   email: string;
@@ -11,12 +10,8 @@ export interface Tokens {
   refresh_token: string;
 }
 
-export interface SearchUserResponse {
-  search_user_id: string;
-}
-
 export interface Partner {
   user_id: string;
   name: string;
-  signal_id: string; 
+  signal_id: string;
 }

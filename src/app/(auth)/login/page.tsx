@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -7,12 +6,26 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email.' }),
@@ -22,6 +35,7 @@ const formSchema = z.object({
 export default function LoginPage() {
   const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -33,15 +47,21 @@ export default function LoginPage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    await login(values);
-    setIsLoading(false);
+    const success = await login(values);
+    if (success) {
+      router.push('/');
+    } else {
+      setIsLoading(false);
+    }
   }
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="font-headline text-2xl">Welcome Back</CardTitle>
-        <CardDescription>Enter your credentials to access your account.</CardDescription>
+        <CardDescription>
+          Enter your credentials to access your account.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>

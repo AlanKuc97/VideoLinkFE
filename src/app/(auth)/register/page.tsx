@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -8,22 +7,41 @@ import * as z from 'zod';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email.' }),
-  password: z.string().min(8, { message: 'Password must be at least 8 characters.' }),
-  date_of_birth: z.string().refine((val) => !isNaN(Date.parse(val)), { message: 'Please enter a valid date.' }),
+  password: z
+    .string()
+    .min(8, { message: 'Password must be at least 8 characters.' }),
+  date_of_birth: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: 'Please enter a valid date.',
+  }),
 });
 
 export default function RegisterPage() {
   const { register } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -37,15 +55,23 @@ export default function RegisterPage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
-    await register(values);
-    setIsLoading(false);
+    const success = await register(values);
+    if (success) {
+      router.push('/login');
+    } else {
+      setIsLoading(false);
+    }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="font-headline text-2xl">Create an Account</CardTitle>
-        <CardDescription>Join ConnectNow and start meeting new people.</CardDescription>
+        <CardTitle className="font-headline text-2xl">
+          Create an Account
+        </CardTitle>
+        <CardDescription>
+          Join ConnectNow and start meeting new people.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
