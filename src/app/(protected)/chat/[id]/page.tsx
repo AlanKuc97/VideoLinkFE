@@ -6,6 +6,8 @@ import { VideoPlayer } from '@/components/VideoPlayer';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertTriangle } from 'lucide-react';
 
 // Public STUN servers for NAT traversal.
 const ICE_SERVERS = {
@@ -25,21 +27,60 @@ export default function ChatPage({ params }: { params: { id: string } }) {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
-  // Effect for setting up and tearing down WebRTC connection
+  const [hasMediaPermission, setHasMediaPermission] = useState(true);
+  // Effect 1: Get user media
   useEffect(() => {
-    // 1. Initialize Peer Connection
-    peerConnection.current = new RTCPeerConnection(ICE_SERVERS);
+    let stream: MediaStream | null = null;
+    const getMedia = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        setLocalStream(stream);
+        setHasMediaPermission(true);
+      } catch (error) {
+        console.error('Error accessing media devices.', error);
+        setHasMediaPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Media Access Denied',
+          description:
+            'Could not access camera/microphone. Please enable permissions in your browser settings.',
+        });
+      }
+    };
 
-    // 2. Event handler for when a remote track is received
-    peerConnection.current.ontrack = (event) => {
+    getMedia();
+
+    return () => {
+      stream?.getTracks().forEach((track) => track.stop());
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Effect 2: Setup WebRTC connection
+  useEffect(() => {
+    if (!localStream) {
+      return; // Wait for the local stream to be ready
+    }
+    const isInitiator = searchParams.get('initiator') === 'true';
+    const pc = new RTCPeerConnection(ICE_SERVERS);
+    peerConnection.current = pc;
+    // Add local stream tracks to the connection
+    localStream.getTracks().forEach((track) => {
+      pc.addTrack(track, localStream);
+    });
+
+    // Event handler for when a remote track is received
+    pc.ontrack = (event) => {
       if (event.streams && event.streams[0]) {
         setRemoteStream(event.streams[0]);
       }
     };
 
-    // 3. Event handler for generating ICE candidates
-    // In a real app, these candidates would be sent to the other peer via a signaling server.
-    peerConnection.current.onicecandidate = (event) => {
+    // Event handler for generating ICE candidates
+    pc.onicecandidate = (event) => {
       if (event.candidate) {
         console.log('--- NEW ICE CANDIDATE --- Please send to other peer');
         console.log(
@@ -49,62 +90,29 @@ export default function ChatPage({ params }: { params: { id: string } }) {
       }
     };
 
-    // 4. Get local media
-    const startMedia = async () => {
+    // If this user is the one who started the search, create the offer
+    const createOffer = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
-        setLocalStream(stream);
-        // Add local tracks to the peer connection
-        stream.getTracks().forEach((track) => {
-          peerConnection.current?.addTrack(track, stream);
-        });
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        console.log('--- OFFER CREATED --- Please send to other peer');
+        console.log(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
+        // TODO: Send offer to the other peer via signaling server
       } catch (error) {
-        toast({
-          variant: 'destructive',
-          title: 'Media Error',
-          description:
-            'Could not access camera/microphone. Please check permissions.',
-        });
-        router.push('/');
+        console.error('Error creating offer:', error);
       }
     };
 
-    startMedia();
-
-    // In a real application, you would also listen for signaling messages here
-    // to handle offers, answers, and candidates from the other peer.
-
-    // 5. Cleanup
-    peerConnection.current?.close();
-    localStream?.getTracks().forEach((track) => track.stop());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Effect for handling the offer/answer flow based on initiator status
-  useEffect(() => {
-    const isInitiator = searchParams.get('initiator') === 'true';
-
-    // This logic would be triggered by signaling messages in a real app.
-    // The initiator creates the offer. The other peer receives it, creates an answer.
-    if (isInitiator && peerConnection.current && localStream) {
-      const createOffer = async () => {
-        try {
-          const offer = await peerConnection.current!.createOffer();
-          await peerConnection.current!.setLocalDescription(offer);
-          console.log('--- OFFER CREATED --- Please send to other peer');
-          console.log(JSON.stringify({ type: 'offer', sdp: offer.sdp }));
-          // TODO: Send offer to the other peer via signaling server
-        } catch (error) {
-          console.error('Error creating offer:', error);
-        }
-      };
-      // A small delay ensures tracks are added before creating the offer.
-      const timer = setTimeout(createOffer, 1000);
-      return () => clearTimeout(timer);
+    if (isInitiator) {
+      createOffer();
     }
+
+    // Cleanup
+    return () => {
+      pc.close();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localStream, searchParams]);
 
   const toggleMute = () => {
@@ -146,6 +154,21 @@ export default function ChatPage({ params }: { params: { id: string } }) {
         <div className="absolute bottom-4 right-4 z-10 w-1/4 max-w-xs">
           <VideoPlayer stream={localStream} isMuted={true} />
         </div>
+
+        {!hasMediaPermission && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-30 p-4">
+            <Alert variant="destructive" className="max-w-md">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Camera & Microphone Required</AlertTitle>
+              <AlertDescription>
+                This app needs access to your camera and microphone to start a
+                video chat. Please grant permission in your browser&apos;s
+                address bar. You may need to reload the page after granting
+                permission.
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
 
         {/* Controls */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
